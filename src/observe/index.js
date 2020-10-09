@@ -1,5 +1,6 @@
 import { isObject, def } from "../util/index";
 import { arrayMethods } from "../arrayMethods.js";
+import { Dep } from "./dep";
 class Observer {
   constructor(value) {
     // value.__ob__ = this;
@@ -23,15 +24,22 @@ class Observer {
   }
 }
 function defineReactive(data, key, value) {
+  let dep = new Dep();
   observe(value);
   Object.defineProperty(data, key, {
     get() {
+      // 依赖收集
+      if (Dep.target) {
+        dep.depend();
+      }
       return value;
     },
     set(newVal) {
       if (newVal == value) return;
       observe(newVal);
       value = newVal;
+      // 通知watcher更新
+      dep.notify();
     },
   });
 }

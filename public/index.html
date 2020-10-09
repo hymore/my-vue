@@ -8,7 +8,6 @@
 
   <body>
     <div id="app" style="color: yellow; background: red">
-      <p>hello {{name}}</p>
       <span>{{age}}</span>
     </div>
 
@@ -22,10 +21,22 @@
             age: 30,
           };
         },
-        computed: {},
-        watch: {},
+        beforeCreate() {
+          console.log(this.age);
+        },
+        created() {
+          console.log(this.age);
+        },
+        beforeMount() {
+          console.log(this.$el);
+        },
+        mounted() {
+          console.log(this.$el);
+        },
       });
-      //   console.log(vm.name);
+      setTimeout(() => {
+        vm.age = 222;
+      }, 1000);
     </script>
   </body>
 </html>

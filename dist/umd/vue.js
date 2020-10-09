@@ -1,10 +1,8 @@
 (function (global, factory) {
-  typeof exports === 'object' && typeof module !== 'undefined' ? module.exports = factory(require('.')) :
-  typeof define === 'function' && define.amd ? define(['.'], factory) :
-  (global = global || self, global.Vue = factory(global._));
-}(this, (function (_) { 'use strict';
-
-  _ = _ && Object.prototype.hasOwnProperty.call(_, 'default') ? _['default'] : _;
+  typeof exports === 'object' && typeof module !== 'undefined' ? module.exports = factory() :
+  typeof define === 'function' && define.amd ? define(factory) :
+  (global = global || self, global.Vue = factory());
+}(this, (function () { 'use strict';
 
   function _typeof(obj) {
     "@babel/helpers - typeof";
@@ -42,6 +40,55 @@
     if (protoProps) _defineProperties(Constructor.prototype, protoProps);
     if (staticProps) _defineProperties(Constructor, staticProps);
     return Constructor;
+  }
+
+  function _defineProperty(obj, key, value) {
+    if (key in obj) {
+      Object.defineProperty(obj, key, {
+        value: value,
+        enumerable: true,
+        configurable: true,
+        writable: true
+      });
+    } else {
+      obj[key] = value;
+    }
+
+    return obj;
+  }
+
+  function ownKeys(object, enumerableOnly) {
+    var keys = Object.keys(object);
+
+    if (Object.getOwnPropertySymbols) {
+      var symbols = Object.getOwnPropertySymbols(object);
+      if (enumerableOnly) symbols = symbols.filter(function (sym) {
+        return Object.getOwnPropertyDescriptor(object, sym).enumerable;
+      });
+      keys.push.apply(keys, symbols);
+    }
+
+    return keys;
+  }
+
+  function _objectSpread2(target) {
+    for (var i = 1; i < arguments.length; i++) {
+      var source = arguments[i] != null ? arguments[i] : {};
+
+      if (i % 2) {
+        ownKeys(Object(source), true).forEach(function (key) {
+          _defineProperty(target, key, source[key]);
+        });
+      } else if (Object.getOwnPropertyDescriptors) {
+        Object.defineProperties(target, Object.getOwnPropertyDescriptors(source));
+      } else {
+        ownKeys(Object(source)).forEach(function (key) {
+          Object.defineProperty(target, key, Object.getOwnPropertyDescriptor(source, key));
+        });
+      }
+    }
+
+    return target;
   }
 
   function _slicedToArray(arr, i) {
@@ -124,6 +171,51 @@
       }
     });
   }
+  var LIFECYCLE_HOOKS = ["beforeCreate", "created", "beforeMount", "mounted", "beforeUpdate", "updated", "beforeDestory", "destoryed"];
+  var strats = {};
+
+  function mergeHook(parentVal, childVal) {
+    if (childVal) {
+      if (parentVal) {
+        return parentVal.concat(childVal);
+      } else {
+        return [childVal];
+      }
+    } else {
+      return parentVal;
+    }
+  }
+
+  LIFECYCLE_HOOKS.forEach(function (hook) {
+    strats[hook] = mergeHook;
+  });
+  function mergeOptions(parent, child) {
+    var options = {};
+
+    for (var key in parent) {
+      mergeField(key);
+    }
+
+    for (var _key in child) {
+      if (!parent.hasOwnProperty(_key)) {
+        mergeField(_key);
+      }
+    }
+
+    function mergeField(key) {
+      if (strats[key]) return options[key] = strats[key](parent[key], child[key]);
+
+      if (_typeof(parent[key]) === "object" && _typeof(child[key]) === "object") {
+        options[key] = _objectSpread2({}, parent[key], {}, child[key]);
+      } else if (child[key] == null) {
+        options[key] = parent[key];
+      } else {
+        options[key] = child[key];
+      }
+    }
+
+    return options;
+  }
 
   var oldArrayMethods = Array.prototype;
   var methods = ["push", "pop", "shift", "unshift", "reverse", "splice", "sort"];
@@ -157,6 +249,47 @@
       return result;
     };
   });
+
+  var id = 0;
+  var Dep = /*#__PURE__*/function () {
+    function Dep() {
+      _classCallCheck(this, Dep);
+
+      this.id = id++;
+      this.subs = [];
+    }
+
+    _createClass(Dep, [{
+      key: "depend",
+      value: function depend() {
+        // this.subs.push(Dep.target);
+        Dep.target.addDep(this);
+      }
+    }, {
+      key: "notify",
+      value: function notify() {
+        this.subs.forEach(function (watcher) {
+          watcher.update();
+        });
+      }
+    }, {
+      key: "addSub",
+      value: function addSub(watcher) {
+        this.subs.push(watcher);
+      }
+    }]);
+
+    return Dep;
+  }();
+  var stack = [];
+  function pushTarget(watcher) {
+    Dep.target = watcher;
+    stack.push(watcher);
+  }
+  function popTarget() {
+    stack.pop();
+    Dep.target = stack[stack.length - 1];
+  }
 
   var Observer = /*#__PURE__*/function () {
     function Observer(value) {
@@ -193,15 +326,23 @@
   }();
 
   function defineReactive(data, key, value) {
+    var dep = new Dep();
     observe(value);
     Object.defineProperty(data, key, {
       get: function get() {
+        // 依赖收集
+        if (Dep.target) {
+          dep.depend();
+        }
+
         return value;
       },
       set: function set(newVal) {
         if (newVal == value) return;
         observe(newVal);
-        value = newVal;
+        value = newVal; // 通知watcher更新
+
+        dep.notify();
       }
     });
   }
@@ -252,58 +393,58 @@
 
   var startTagClose = /^\s*(\/?)>/; // 匹配标签结束的 >
 
-  var root = null,
-      currentParent;
-  var stack = [];
   var ELEMENT_TYPE = 1;
   var TEXT_TYPE = 3;
-
-  function createASTElement(tagName, attrs) {
-    return {
-      tag: tagName,
-      type: ELEMENT_TYPE,
-      children: [],
-      attrs: attrs,
-      parent: null
-    };
-  }
-
-  function start(tagName, attrs) {
-    //   console.log(("开始标签", tagName), ("属性是", attrs));
-    var element = createASTElement(tagName, attrs);
-
-    if (!root) {
-      root = element;
-    }
-
-    currentParent = element;
-    stack.push(element);
-  }
-
-  function end(tagName) {
-    //   console.log("结束标签：", tagName);
-    var element = stack.pop();
-    currentParent = stack[stack.length - 1];
-
-    if (currentParent) {
-      element.parent = currentParent;
-      currentParent.children.push(element);
-    }
-  }
-
-  function chars(text) {
-    //   console.log("文本是：", text);
-    text = text.replace(/\s/g, "");
-
-    if (text) {
-      currentParent.children.push({
-        type: TEXT_TYPE,
-        text: text
-      });
-    }
-  }
-
   function parseHTML(html) {
+    function createASTElement(tagName, attrs) {
+      return {
+        tag: tagName,
+        type: ELEMENT_TYPE,
+        children: [],
+        attrs: attrs,
+        parent: null
+      };
+    }
+
+    function start(tagName, attrs) {
+      //   console.log(("开始标签", tagName), ("属性是", attrs));
+      var element = createASTElement(tagName, attrs);
+
+      if (!root) {
+        root = element;
+      }
+
+      currentParent = element;
+      stack.push(element);
+    }
+
+    function end(tagName) {
+      //   console.log("结束标签：", tagName);
+      var element = stack.pop();
+      currentParent = stack[stack.length - 1];
+
+      if (currentParent) {
+        element.parent = currentParent;
+        currentParent.children.push(element);
+      }
+    }
+
+    function chars(text) {
+      //   console.log("文本是：", text);
+      text = text.replace(/\s/g, "");
+
+      if (text) {
+        currentParent.children.push({
+          type: TEXT_TYPE,
+          text: text
+        });
+      }
+    }
+
+    var root = null,
+        currentParent;
+    var stack = [];
+
     while (html) {
       var textEnd = html.indexOf("<");
 
@@ -455,11 +596,50 @@
     return renderFn;
   }
 
-  var Watcher = function Watcher(vm, fn) {
-    _classCallCheck(this, Watcher);
+  var id$1 = 0;
+  var Watcher = /*#__PURE__*/function () {
+    function Watcher(vm, expOrFn, callback, options) {
+      _classCallCheck(this, Watcher);
 
-    fn();
-  };
+      this.id = id$1++;
+      this.vm = vm;
+      this.callback = callback;
+      this.options = options;
+      this.depId = new Set();
+      this.getter = expOrFn;
+      this.deps = [];
+      this.get();
+    }
+
+    _createClass(Watcher, [{
+      key: "get",
+      value: function get() {
+        pushTarget(this); // watcher保存在Dep.target
+
+        this.getter(); //渲染watcher执行
+
+        popTarget();
+      }
+    }, {
+      key: "update",
+      value: function update() {
+        this.get();
+      }
+    }, {
+      key: "addDep",
+      value: function addDep(dep) {
+        var id = dep.id;
+
+        if (!this.depId.has(id)) {
+          this.depId.add(id);
+          this.deps.push(dep);
+          dep.addSub(this);
+        }
+      }
+    }]);
+
+    return Watcher;
+  }();
 
   function patch(oldVnode, vnode) {
     //   判断是更新还是渲染
@@ -471,6 +651,7 @@
       var el = createElm(vnode);
       parentElm.insertBefore(el, oldElm.nextSibling);
       parentElm.removeChild(oldElm);
+      return el;
     }
   }
 
@@ -518,7 +699,7 @@
     };
   }
   function mountComponent(vm, el) {
-    var options = vm.$options;
+    callHook(vm, "beforeMount");
     vm.$el = el; // 渲染页面
 
     var updateComponent = function updateComponent() {
@@ -526,16 +707,30 @@
     };
 
     new Watcher(vm, updateComponent, function () {}, true); // 渲染watcher
+
+    callHook(vm, "mounted");
+  }
+  function callHook(vm, hook) {
+    var handers = vm.$options[hook];
+
+    if (handers) {
+      for (var i = 0; i < handers.length; i++) {
+        handers[i].call(vm);
+      }
+    }
   }
 
   function initMixin(Vue) {
     // 初始化流程
     Vue.prototype._init = function (options) {
       // 数据劫持
-      var vm = this;
-      vm.$options = options; // 初始化状态
+      var vm = this; // 将用户传入的配置和全局的合并
 
-      initState(vm); // 初始化渲染
+      vm.$options = mergeOptions(vm.constructor.options, options);
+      callHook(vm, "beforeCreate"); // 初始化状态
+
+      initState(vm);
+      callHook(vm, "created"); // 初始化渲染
 
       if (vm.$options.el) {
         vm.$mount(vm.$options.el);
@@ -606,13 +801,23 @@
     };
   }
 
+  function initGlobalAPI(Vue) {
+    Vue.options = {};
+
+    Vue.mixin = function (mixin) {
+      this.options = mergeOptions(this.options, mixin);
+    };
+  }
+
   function Vue(options) {
     this._init(options);
   }
 
   initMixin(Vue);
   renderMixin(Vue);
-  lifecycleMixin(Vue);
+  lifecycleMixin(Vue); // 初始化全局api
+
+  initGlobalAPI(Vue);
 
   return Vue;
 
