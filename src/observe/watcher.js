@@ -1,5 +1,5 @@
 import { pushTarget, popTarget } from "./dep";
-
+import {queueWatcher} from './schedular';
 let id = 0;
 export class Watcher {
   constructor(vm, expOrFn, callback, options) {
@@ -20,7 +20,8 @@ export class Watcher {
     popTarget();
   }
   update() {
-    this.get();
+    // this.get();
+    queueWatcher(this);
   }
   addDep(dep) {
     let id = dep.id;
@@ -30,4 +31,8 @@ export class Watcher {
       dep.addSub(this);
     }
   }
+  run(){
+    this.get();
+  }
 }
+

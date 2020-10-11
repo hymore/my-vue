@@ -244,6 +244,7 @@
 
       if (inserted) {
         ob.observerArray(inserted);
+        this.dep.notify();
       }
 
       return result;
@@ -296,6 +297,8 @@
       _classCallCheck(this, Observer);
 
       // value.__ob__ = this;
+      this.dep = new Dep(); //dep用于数组依赖收集
+
       def(value, "__ob__", this);
 
       if (Array.isArray(value)) {
@@ -326,13 +329,22 @@
   }();
 
   function defineReactive(data, key, value) {
-    var dep = new Dep();
-    observe(value);
+    var dep = new Dep(); // dep 用于对象收集依赖
+
+    var childOb = observe(value);
     Object.defineProperty(data, key, {
       get: function get() {
         // 依赖收集
         if (Dep.target) {
-          dep.depend();
+          dep.depend(); // 数组的依赖收集
+
+          if (childOb) {
+            childOb.dep.depend(); // 数组里还有数组
+
+            if (Array.isArray(value)) {
+              dependArray(value);
+            }
+          }
         }
 
         return value;
@@ -353,6 +365,17 @@
     }
 
     return new Observer(data); //用来观测数据
+  }
+
+  function dependArray(value) {
+    for (var i = 0; i < value.length; i++) {
+      var current = value[i];
+      current.__ob__ && current.__ob__.dep.depend();
+
+      if (Array.isArray(current)) {
+        dependArray(current);
+      }
+    }
   }
 
   function initState(vm) {
@@ -596,6 +619,46 @@
     return renderFn;
   }
 
+  var callbacks = [];
+  var waiting = false;
+
+  function flushCallback() {
+    callbacks.forEach(function (cb) {
+      return cb();
+    });
+    waiting = false;
+    callbacks = [];
+  }
+
+  function nextTick(cb) {
+    callbacks.push(cb); // promise --> mutationObserver --> setImmediate --> setTimeout
+
+    if (waiting === false) {
+      setTimeout(flushCallback, 0);
+      waiting = true;
+    }
+  }
+
+  function slushSchedularQueue() {
+    queue.forEach(function (watcher) {
+      watcher.run();
+      queue = [];
+      has = {};
+    });
+  }
+
+  var queue = [];
+  var has = {};
+  function queueWatcher(watcher) {
+    var id = watcher.id;
+
+    if (has[id] == null) {
+      has[id] = true;
+      queue.push(watcher);
+      nextTick(slushSchedularQueue);
+    }
+  }
+
   var id$1 = 0;
   var Watcher = /*#__PURE__*/function () {
     function Watcher(vm, expOrFn, callback, options) {
@@ -623,7 +686,8 @@
     }, {
       key: "update",
       value: function update() {
-        this.get();
+        // this.get();
+        queueWatcher(this);
       }
     }, {
       key: "addDep",
@@ -635,6 +699,11 @@
           this.deps.push(dep);
           dep.addSub(this);
         }
+      }
+    }, {
+      key: "run",
+      value: function run() {
+        this.get();
       }
     }]);
 
@@ -752,6 +821,8 @@
 
       mountComponent(vm, el);
     };
+
+    Vue.prototype.$nextTick = nextTick;
   }
 
   function createElement(tag) {

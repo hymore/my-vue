@@ -28,6 +28,7 @@ methods.forEach((method) => {
     }
     if (inserted) {
       ob.observerArray(inserted);
+      this.dep.notify();
     }
     return result;
   };

@@ -1,4 +1,4 @@
-import { arrayMethods } from "../arrayMethods";
+
 import { parseHTML } from "./parse-html";
 const defaultTagRE = /\{\{((?:.|\r?\n)+?)\}\}/g;
 
